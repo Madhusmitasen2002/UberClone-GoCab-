@@ -1,14 +1,16 @@
-import { useState, useEffect } from "react";
+// client/pages/Rider.jsx
+import { useEffect, useState } from "react";
+import { toast } from "react-toastify";
 import {
   Box,
   Typography,
   TextField,
-  InputAdornment,
-  Button,
   IconButton,
+  Button,
+  Paper,
+  CircularProgress,
+  Alert,
 } from "@mui/material";
-import LocationOnIcon from "@mui/icons-material/LocationOn";
-import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import SwapVertIcon from "@mui/icons-material/SwapVert";
 import {
   MapContainer,
@@ -24,9 +26,34 @@ import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
 
-import DriverListModal from "./DriverListModal";
+import RatingsModal from "../components/RatingsModal";
+import { supabase } from "../supabaseClient";
+import { api } from "../../utils/api";
 
-// Fix leaflet icons
+// --- Custom Icons ---
+const driverIcon = new L.Icon({
+  iconUrl:
+    "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
+  shadowUrl: markerShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+});
+const pickupIcon = new L.Icon({
+  iconUrl:
+    "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
+  shadowUrl: markerShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+});
+const dropIcon = new L.Icon({
+  iconUrl:
+    "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
+  shadowUrl: markerShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+});
+
+// Fix default Leaflet icons
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIcon2x,
@@ -34,7 +61,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-// Recenter helper
 function Recenter({ center }) {
   const map = useMap();
   useEffect(() => {
@@ -43,8 +69,7 @@ function Recenter({ center }) {
   return null;
 }
 
-
-// Geocoding
+// --- Helpers ---
 async function geocodeAddress(address) {
   if (!address) return null;
   try {
@@ -54,16 +79,13 @@ async function geocodeAddress(address) {
       )}`
     );
     const data = await res.json();
-    if (data?.length > 0)
-      return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+    if (data?.length > 0) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
     return null;
-  } catch (e) {
-    console.error("geocode error", e);
+  } catch {
     return null;
   }
 }
 
-// Get route + distance
 async function getRoute(pickup, drop) {
   try {
     const res = await fetch(
@@ -72,24 +94,22 @@ async function getRoute(pickup, drop) {
     const data = await res.json();
     if (data.routes?.[0]) {
       const coords = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
-      const distance = data.routes[0].distance || 0; // in meters
-      const duration = data.routes[0].duration || 0; // in seconds
+      const distance = data.routes[0].distance || 0;
+      const duration = data.routes[0].duration || 0;
       return { coords, distance, duration };
     }
     return { coords: [], distance: 0, duration: 0 };
-  } catch (e) {
-    console.error("route error", e);
+  } catch {
     return { coords: [], distance: 0, duration: 0 };
   }
 }
-
 
 export default function Rider() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [time, setTime] = useState("");
   const [ride, setRide] = useState(null);
-  const [showDrivers, setShowDrivers] = useState(false);
+  const [showRatings, setShowRatings] = useState(false);
 
   const [center, setCenter] = useState([27.3314, 88.6138]);
   const [pickupCoords, setPickupCoords] = useState(null);
@@ -100,8 +120,20 @@ export default function Rider() {
   const [durationMin, setDurationMin] = useState(0);
   const [fare, setFare] = useState(0);
 
-  const userId = localStorage.getItem("userId");
+  const [availableDrivers, setAvailableDrivers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
+  const userId = localStorage.getItem("userId");
+  const [userName, setUserName] = useState(localStorage.getItem("userName") || "User");
+
+  // --- Sync username ---
+  useEffect(() => {
+    const storedName = localStorage.getItem("userName");
+    if (storedName) setUserName(storedName);
+  }, []);
+
+  // --- Location ---
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition((pos) =>
@@ -110,7 +142,37 @@ export default function Rider() {
     }
   }, []);
 
-  // Geocode from
+  // --- Fetch drivers online ---
+  const fetchOnlineDrivers = async () => {
+    try {
+      setLoading(true);
+      const data = await api.getDriversOnline();
+      setAvailableDrivers(data || []);
+    } catch {
+      setError("Failed to fetch drivers");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOnlineDrivers();
+    const channel = supabase
+      .channel("drivers-realtime")
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "users" }, (payload) => {
+        if (payload.new.role === "driver") {
+          setAvailableDrivers((prev) => {
+            const others = prev.filter((d) => d.id !== payload.new.id);
+            if (payload.new.is_online) return [...others, payload.new];
+            return others;
+          });
+        }
+      })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, []);
+
+  // --- Geocode addresses ---
   useEffect(() => {
     if (!from) return setPickupCoords(null);
     (async () => {
@@ -122,7 +184,6 @@ export default function Rider() {
     })();
   }, [from]);
 
-  // Geocode to
   useEffect(() => {
     if (!to) return setDropCoords(null);
     (async () => {
@@ -131,7 +192,7 @@ export default function Rider() {
     })();
   }, [to]);
 
-  // Build route
+  // --- Build route & fare ---
   useEffect(() => {
     async function buildRoute() {
       if (!pickupCoords || !dropCoords) {
@@ -147,21 +208,16 @@ export default function Rider() {
       const mins = (r.duration || 0) / 60;
       setDistanceKm(km);
       setDurationMin(mins);
-
-      // fare formula
-      const baseFare = 40;      // ₹ base
-const perKm = 10;         // ₹ per km
-const perMin = 0.5;       // ₹ per minute
-const computed = Math.max(
-  baseFare,
-  Math.round(baseFare + perKm * km + perMin * mins)
-);
-setFare(computed);
-
+      const baseFare = 30;
+      const perKm = 8;
+      const perMin = 1;
+      const computed = Math.max(baseFare, Math.round(baseFare + perKm * km + perMin * mins));
+      setFare(computed);
     }
     buildRoute();
   }, [pickupCoords, dropCoords]);
 
+  // --- Swap locations ---
   const handleSwap = () => {
     setFrom(to);
     setTo(from);
@@ -173,222 +229,119 @@ setFare(computed);
     setFare(0);
   };
 
+  // --- Book ride ---
   const handleBook = async () => {
-    if (!from || !to) return alert("Fill From & To");
-    if (!userId) return alert("Please login first");
-
+    if (!from || !to) return toast.error("⚠️ Fill From & To");
+    if (!userId) return toast.error("⚠️ Please login first");
     try {
-      const res = await fetch("http://localhost:5000/api/rides", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          passenger_id: userId,
-          pickup_location: from,
-          dropoff_location: to,
-          pickup_time: time
-  ? new Date(`${new Date().toISOString().split("T")[0]}T${time}:00Z`).toISOString()
-  : new Date().toISOString(),
-
-          pickup_lat: pickupCoords?.[0] ?? null,
-          pickup_lng: pickupCoords?.[1] ?? null,
-          dropoff_lat: dropCoords?.[0] ?? null,
-          dropoff_lng: dropCoords?.[1] ?? null,
-          distance_km: Number(distanceKm.toFixed(3)),
-          duration_min: Number(durationMin.toFixed(1)),
-          fare,
-        }),
+      const data = await api.createRide({
+        passenger_id: userId,
+        pickup_location: from,
+        dropoff_location: to,
+        pickup_time: time
+          ? new Date(`${new Date().toISOString().split("T")[0]}T${time}:00Z`).toISOString()
+          : new Date().toISOString(),
+        pickup_lat: pickupCoords?.[0] ?? null,
+        pickup_lng: pickupCoords?.[1] ?? null,
+        dropoff_lat: dropCoords?.[0] ?? null,
+        dropoff_lng: dropCoords?.[1] ?? null,
+        distance_km: Number(distanceKm.toFixed(3)),
+        duration_min: Number(durationMin.toFixed(1)),
+        fare,
       });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
       setRide(data);
-      setShowDrivers(true);
+      toast.info("📍 Ride requested, waiting for drivers...");
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
+  // --- Payment ---
+  const handlePay = async () => {
+    if (!ride?.id || !fare) return;
+    try {
+      const data = await api.createPayment({ ride_id: ride.id, amount: fare });
+      if (data.url) {
+        toast.success("💳 Redirecting to payment...");
+        window.location.href = data.url;
+      } else {
+        toast.error("Payment session failed");
+      }
+    } catch (err) {
+      toast.error("Payment error: " + err.message);
+    }
+  };
+
+  // --- Realtime ride updates ---
+  useEffect(() => {
+    if (!ride?.id) return;
+    const channel = supabase
+      .channel("ride-status")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "rides", filter: `id=eq.${ride.id}` },
+        (payload) => setRide(payload.new)
+      )
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [ride?.id]);
+
+  useEffect(() => {
+    if (ride?.status === "completed") setShowRatings(true);
+  }, [ride?.status]);
+
   return (
-    <Box sx={{ maxWidth: 600, width: "100%", p: 3, pt: 10, mx: "auto" }}>
-      <Typography
-        variant="h4"
-        fontWeight="bold"
-        mb={3}
-        textAlign="center"
-        color="black"
-      >
-        Welcome Rider! 🚖
+    <Box sx={{ maxWidth: 900, width: "95%", p: 3, pt: 10, mx: "auto" }}>
+      <Typography variant="h4" fontWeight="bold" mb={4} textAlign="center" sx={{ color: "#222" }}>
+        Welcome, {userName} 🚖
       </Typography>
 
-      {/* Inputs */}
-      <Box display="flex" flexDirection="column" gap={2} mb={3}>
-        <TextField
-  label="From"
-  value={from}
-  onChange={(e) => setFrom(e.target.value)}
-  InputProps={{
-    startAdornment: (
-      <InputAdornment position="start">
-        <LocationOnIcon sx={{ color: "black" }} />
-      </InputAdornment>
-    ),
-    style: { color: "black" },
-  }}
-  InputLabelProps={{
-    style: { color: "black" },
-    shrink: true, // 👈 ensures label moves up even if field has value
-  }}
-  sx={{
-    bgcolor: "white",
-    borderRadius: 1,
-    "& .MuiOutlinedInput-root": {
-      "& fieldset": { borderColor: "black" },
-      "&:hover fieldset": { borderColor: "gray" },
-      "&.Mui-focused fieldset": { borderColor: "black" },
-    },
-    "& .MuiInputBase-input": {
-      color: "black !important", // 👈 ensures text always visible
-      zIndex: 2,
-    },
-    "& .MuiInputLabel-root": {
-      color: "black",
-    },
-  }}
-  fullWidth
-/>
+      {/* --- Inputs --- */}
+      <Paper sx={{ display: "flex", alignItems: "center", gap: 1.5, p: 2, borderRadius: 3, mb: 3 }}>
+        <TextField label="From" value={from} onChange={(e) => setFrom(e.target.value)} size="small" fullWidth />
+        <IconButton onClick={handleSwap} sx={{ bgcolor: "black", color: "white" }}>
+          <SwapVertIcon />
+        </IconButton>
+        <TextField label="To" value={to} onChange={(e) => setTo(e.target.value)} size="small" fullWidth />
+      </Paper>
 
-        <Box display="flex" justifyContent="center">
-          <IconButton
-            onClick={handleSwap}
-            sx={{
-              bgcolor: "white",
-              color: "black",
-              boxShadow: 1,
-              "&:hover": { bgcolor: "#f0f0f0" },
-            }}
-          >
-            <SwapVertIcon />
-          </IconButton>
-        </Box>
-        <TextField
-          label="To"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <LocationOnIcon sx={{ color: "black" }} />
-              </InputAdornment>
-            ),
-            style: { color: "black" },
-          }}
-          fullWidth
-          InputLabelProps={{ style: { color: "black" },  shrink: true }}
-          sx={{
-            bgcolor: "white",
-            borderRadius: 2,
-            boxShadow: 2,
-            "& .MuiOutlinedInput-root": {
-              color: "black",
-              "& fieldset": { borderColor: "black" },
-              "&:hover fieldset": { borderColor: "gray" },
-              "&.Mui-focused fieldset": { borderColor: "black", borderWidth: 2 },
-              "& .MuiInputBase-input": {
-  color: "black !important",   // 👈 ensures swapped text is visible
-  zIndex: 2,                   // keep text above label
-},
-           },
-          }}
-        />
-      </Box>
-
-      {/* Summary */}
-      <Box
-        display="flex"
-        justifyContent="space-between"
-        alignItems="center"
-        mb={2}
-      >
-        <Typography color="white">
-          Distance: {distanceKm ? distanceKm.toFixed(2) : "—"} km (
-          {durationMin ? Math.round(durationMin) : "—"} min)
+      {/* --- Summary + Book --- */}
+      <Box display="flex" alignItems="center" gap={2} mb={3} flexWrap="wrap">
+        <Typography sx={{ flex: 1, minWidth: 200, color: "#222" }}>
+          Distance: {distanceKm ? distanceKm.toFixed(2) : "—"} km ({durationMin ? Math.round(durationMin) : "—"} min) | Fare: ₹{fare || "—"}
         </Typography>
-        <Typography variant="h6" color="white">
-          Estimated Fare: ₹{fare || "—"}
-        </Typography>
-      </Box>
-
-      {/* Map */}
-      <Box mb={3} sx={{ height: 300, borderRadius: 2, overflow: "hidden" }}>
-  <MapContainer center={center} zoom={13} style={{ height: "100%", width: "100%" }}>
-    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-    <Recenter center={center} />   {/* 👈 this line added */}
-    {pickupCoords && <Marker position={pickupCoords}><Popup>Pickup: {from}</Popup></Marker>}
-    {dropCoords && <Marker position={dropCoords}><Popup>Drop: {to}</Popup></Marker>}
-    {route.length > 0 && <Polyline positions={route} />}
-  </MapContainer>
-</Box>
-
-
-      {/* Actions */}
-      <Box display="flex" gap={2} mb={3} alignItems="center">
-        <Button
-          variant="contained"
-          onClick={handleBook}
-          sx={{
-            bgcolor: "black",
-            color: "white",
-            borderRadius: 2,
-            px: 3,
-            py: 1.5,
-            fontWeight: "bold",
-            boxShadow: "0 4px 10px rgba(0,0,0,0.4)",
-            "&:hover": {
-              bgcolor: "#333",
-              transform: "translateY(-2px)",
-              boxShadow: "0 6px 14px rgba(0,0,0,0.5)",
-            },
-            transition: "all 0.2s ease-in-out",
-          }}
-        >
-          Book Now
+        <TextField type="time" value={time} onChange={(e) => setTime(e.target.value)} size="small" sx={{ width: 140 }} />
+        <Button variant="contained" sx={{ bgcolor: "black", color: "#fff" }} onClick={handleBook}>
+          Book Ride
         </Button>
-        <TextField
-          type="time"
-          label="Pickup Time"
-          value={time}
-          onChange={(e) => setTime(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <AccessTimeIcon sx={{ color: "black" }} />
-              </InputAdornment>
-            ),
-          }}
-          InputLabelProps={{ style: { color: "black" } }}
-          sx={{
-            bgcolor: "white",
-            borderRadius: 2,
-            boxShadow: 2,
-            "& .MuiOutlinedInput-root": {
-              "& fieldset": { borderColor: "black" },
-              "&:hover fieldset": { borderColor: "gray" },
-              "&.Mui-focused fieldset": { borderColor: "black", borderWidth: 2 },
-            },
-          }}
-        />
       </Box>
 
-      {ride && (
-        <DriverListModal
-          open={showDrivers}
-          handleClose={() => setShowDrivers(false)}
-          from={from}
-          to={to}
-          time={time}
-          rideId={ride.id}
-          fare={fare}
-        />
+      {/* --- Map --- */}
+      <Box sx={{ height: 450, borderRadius: 3, overflow: "hidden", mb: 3 }}>
+        <MapContainer center={center} zoom={13} style={{ height: "100%", width: "100%" }}>
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          <Recenter center={center} />
+          {pickupCoords && <Marker position={pickupCoords} icon={pickupIcon}><Popup>Pickup: {from}</Popup></Marker>}
+          {dropCoords && <Marker position={dropCoords} icon={dropIcon}><Popup>Drop: {to}</Popup></Marker>}
+          {availableDrivers.map((d) => d.lat && d.lng && <Marker key={d.id} position={[d.lat, d.lng]} icon={driverIcon}><Popup>🚖 {d.name}</Popup></Marker>)}
+          {route.length > 0 && <Polyline positions={route} color="blue" />}
+        </MapContainer>
+      </Box>
+
+      {loading && <CircularProgress />}
+      {error && <Alert severity="error">{error}</Alert>}
+
+      {/* --- Ride Status --- */}
+      {ride?.status === "requested" && <Paper sx={{ p: 3, bgcolor: "white" }}>⏳ Looking for drivers...</Paper>}
+      {ride?.status === "accepted" && (
+        <Paper sx={{ p: 3, bgcolor: "#e0f7fa" }}>
+          <Typography variant="h6">🚘 Driver Assigned</Typography>
+          <Typography><b>Name:</b> {ride.driver_name || "Driver"}</Typography>
+          <Button variant="contained" sx={{ mt: 2 }} onClick={handlePay}>Pay Now ₹{ride.fare || fare}</Button>
+        </Paper>
       )}
+      {ride?.status === "in_progress" && <Paper sx={{ p: 3, bgcolor: "#fff9c4" }}>🚖 Ride in Progress</Paper>}
+      {ride?.status === "completed" && <RatingsModal open={showRatings} onClose={() => setShowRatings(false)} rideId={ride.id} driverId={ride.driver_id} />}
     </Box>
   );
 }

@@ -1,30 +1,27 @@
+// client/components/RatingsModal.jsx
 import React, { useState } from "react";
-import { Button, Modal, Box, Typography, Rating } from "@mui/material";
+import { toast } from "react-toastify";
+import { Button, Modal, Box, Typography, Rating, TextField } from "@mui/material";
+import { api } from "../../utils/api";
 
 export default function RatingsModal({ open, onClose, rideId, driverId }) {
   const [value, setValue] = useState(5);
+  const [comment, setComment] = useState("");
 
   const handleSubmit = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/ratings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ride_id: rideId || 1,
-          rater_id: localStorage.getItem("userId"),
-          ratee_id: driverId || localStorage.getItem("driverId"),
-          rating: value,
-          comment: "Great ride!",
-        }),
+      await api.submitRating({
+        ride_id: rideId,
+        rater_id: localStorage.getItem("userId"),
+        ratee_id: driverId,
+        rating: value,
+        comment: comment || "Great ride!",
       });
 
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
-
-      alert("Rating submitted ✅");
+      toast.success("⭐ Rating submitted");
       onClose();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -45,12 +42,30 @@ export default function RatingsModal({ open, onClose, rideId, driverId }) {
         <Typography variant="h6" mb={2}>
           Rate your driver
         </Typography>
+
         <Rating
           name="simple-controlled"
           value={value}
           onChange={(e, newValue) => setValue(newValue)}
           size="large"
         />
+
+        <TextField
+          label="Leave a comment"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          fullWidth
+          multiline
+          rows={3}
+          sx={{
+            mt: 2,
+            bgcolor: "white",
+            borderRadius: 2,
+            "& .MuiInputBase-root": { color: "black" },
+            "& .MuiInputLabel-root": { color: "#222" },
+          }}
+        />
+
         <Box mt={3}>
           <Button
             onClick={handleSubmit}

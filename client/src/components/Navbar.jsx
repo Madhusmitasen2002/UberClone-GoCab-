@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
+import React, { useState, useContext } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   AppBar,
   Toolbar,
-  Typography,
   Button,
   IconButton,
   Box,
@@ -12,6 +11,7 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  Switch
 } from "@mui/material";
 import {
   Home as HomeIcon,
@@ -22,102 +22,110 @@ import {
   Logout as LogoutIcon,
   Menu as MenuIcon,
 } from "@mui/icons-material";
+import { UserContext } from "../context/UserContext";
 
 export default function Navbar({ setOpenRatings }) {
-  const [user, setUser] = useState(null);
   const [openSidebar, setOpenSidebar] = useState(false);
+  const { session, online, logout, toggleOnline } = useContext(UserContext);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const session = JSON.parse(localStorage.getItem("userSession"));
-    if (session) setUser(session.user);
-  }, []);
+  const displayName = session?.user?.user_metadata?.name || "User";
+  const displayRole = session?.user?.user_metadata?.role || "";
 
-  const handleLogout = async () => {
-    try {
-      const res = await fetch("http://localhost:5000/api/logout", {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (data.error) return alert(data.error);
-
-      localStorage.removeItem("userSession");
-      setUser(null);
-      navigate("/login");
-    } catch (err) {
-      alert(err.message || "Logout failed");
-    }
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
   };
 
   return (
     <>
-      <AppBar position="fixed" color="primary" elevation={3}>
+      <AppBar position="fixed" color="primary">
         <Toolbar className="flex justify-between">
-          {/* Left side: Logo + Sidebar Toggle */}
           <Box display="flex" alignItems="center" gap={2}>
-            <IconButton edge="start" color="inherit" onClick={() => setOpenSidebar(true)}>
+            <IconButton color="inherit" onClick={() => setOpenSidebar(true)}>
               <MenuIcon />
             </IconButton>
-            <Typography
-              variant="h6"
-              component={Link}
+            <Link
               to="/"
-              style={{ textDecoration: "none", color: "white" }}
+              style={{
+                color: "white",
+                fontWeight: "bold",
+                fontSize: 20,
+                textDecoration: "none",
+              }}
             >
-              🚖 UberClone
-            </Typography>
+              🚖 GoCab
+            </Link>
           </Box>
 
-          {/* Right side: Links */}
           <Box display={{ xs: "none", md: "flex" }} alignItems="center" gap={2}>
             <Button color="inherit" component={Link} to="/" startIcon={<HomeIcon />}>
               Home
             </Button>
 
-            {!user ? (
+            {!session ? (
               <>
-                <Button color="inherit" component={Link} to="/login" startIcon={<LoginIcon />}>
+                <Button
+                  color="inherit"
+                  component={Link}
+                  to="/login"
+                  startIcon={<LoginIcon />}
+                >
                   Login
                 </Button>
-                <Button color="inherit" component={Link} to="/signup" startIcon={<AccountCircle />}>
+                <Button
+                  color="inherit"
+                  component={Link}
+                  to="/signup"
+                  startIcon={<AccountCircle />}
+                >
                   Signup
                 </Button>
               </>
             ) : (
               <>
-                <>
-  <Button
-    color="inherit"
-    component={Link}
-    to="/payments"
-    startIcon={<Payment />}
-  >
-    Payments
-  </Button>
+                <Button
+                  color="inherit"
+                  component={Link}
+                  to="/payments"
+                  startIcon={<Payment />}
+                >
+                  {displayRole === "rider" ? "Payment History" : "Earnings"}
+                </Button>
 
-  <Button
-    color="inherit"
-    onClick={() => setOpenRatings(true)}
-    startIcon={<Star />}
-  >
-    Ratings
-  </Button>
+                <Button
+                  color="inherit"
+                  onClick={() => setOpenRatings(true)}
+                  startIcon={<Star />}
+                >
+                  Ratings
+                </Button>
 
-  <Typography variant="body2" sx={{ mx: 1 }}>
-    Hi, {user.user_metadata?.name || "User"}
-  </Typography>
+                {displayRole === "driver" && (
+                  <Box display="flex" alignItems="center" sx={{ color: "white" }}>
+                    <Switch
+                      checked={online}
+                      onChange={toggleOnline}
+                      color="success"
+                    />
+                    <span style={{ marginLeft: 8 }}>
+                      {online ? "Online" : "Offline"}
+                    </span>
+                  </Box>
+                )}
 
-  {/* ✅ Always show Logout on AppBar */}
-  <Button
-    color="secondary"
-    variant="contained"
-    onClick={handleLogout}
-    startIcon={<LogoutIcon />}
-  >
-    Logout
-  </Button>
-</>
+                <span style={{ color: "white", margin: "0 8px" }}>
+                  Hi, {displayName} ({displayRole})
+                </span>
 
+                <Button
+                  color="secondary"
+                  variant="contained"
+                  onClick={handleLogout}
+                  startIcon={<LogoutIcon />}
+                >
+                  Logout
+                </Button>
               </>
             )}
           </Box>
@@ -126,35 +134,65 @@ export default function Navbar({ setOpenRatings }) {
 
       {/* Sidebar Drawer */}
       <Drawer anchor="left" open={openSidebar} onClose={() => setOpenSidebar(false)}>
-        <Box width={250} role="presentation" onClick={() => setOpenSidebar(false)}>
+        <Box width={260} role="presentation" onClick={() => setOpenSidebar(false)}>
           <List>
             <ListItem button component={Link} to="/">
-              <ListItemIcon><HomeIcon /></ListItemIcon>
+              <ListItemIcon>
+                <HomeIcon />
+              </ListItemIcon>
               <ListItemText primary="Home" />
             </ListItem>
-            {!user ? (
+
+            {!session ? (
               <>
                 <ListItem button component={Link} to="/login">
-                  <ListItemIcon><LoginIcon /></ListItemIcon>
+                  <ListItemIcon>
+                    <LoginIcon />
+                  </ListItemIcon>
                   <ListItemText primary="Login" />
                 </ListItem>
+
                 <ListItem button component={Link} to="/signup">
-                  <ListItemIcon><AccountCircle /></ListItemIcon>
+                  <ListItemIcon>
+                    <AccountCircle />
+                  </ListItemIcon>
                   <ListItemText primary="Signup" />
                 </ListItem>
               </>
             ) : (
               <>
                 <ListItem button component={Link} to="/payments">
-                  <ListItemIcon><Payment /></ListItemIcon>
-                  <ListItemText primary="Payments" />
+                  <ListItemIcon>
+                    <Payment />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={displayRole === "rider" ? "Payment History" : "Earnings"}
+                  />
                 </ListItem>
+
                 <ListItem button onClick={() => setOpenRatings(true)}>
-                  <ListItemIcon><Star /></ListItemIcon>
+                  <ListItemIcon>
+                    <Star />
+                  </ListItemIcon>
                   <ListItemText primary="Ratings" />
                 </ListItem>
+
+                {displayRole === "driver" && (
+                  <ListItem>
+                    <ListItemIcon>{online ? "🟢" : "🔴"}</ListItemIcon>
+                    <ListItemText primary={online ? "Online" : "Offline"} />
+                    <Switch
+                      checked={online}
+                      onChange={toggleOnline}
+                      color="success"
+                    />
+                  </ListItem>
+                )}
+
                 <ListItem button onClick={handleLogout}>
-                  <ListItemIcon><LogoutIcon /></ListItemIcon>
+                  <ListItemIcon>
+                    <LogoutIcon />
+                  </ListItemIcon>
                   <ListItemText primary="Logout" />
                 </ListItem>
               </>

@@ -5,12 +5,15 @@ import "./index.css";
 import App from "./App";
 import theme from "./theme";
 import { ThemeProvider } from "@emotion/react";
+import { UserProvider } from "./context/UserContext";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
     <ThemeProvider theme={theme}>
-      <App />
+      <UserProvider>
+        <App />
+      </UserProvider>
       </ThemeProvider>
     </BrowserRouter>
   </React.StrictMode>

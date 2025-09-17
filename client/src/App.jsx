@@ -10,6 +10,8 @@ import Register from "./pages/Register";
 import PaymentHistory from "./pages/PaymentHistory";
 import Rider from "./pages/Rider";
 import Driver from "./pages/Driver";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 import RatingsModal from "./components/RatingsModal"; // ✅ Import modal
 
@@ -18,6 +20,7 @@ export default function App() {
 
   return (
     <div className="flex flex-col min-h-screen w-screen">
+      <ToastContainer position="top-center" autoClose={3000} />
       <Navbar />
 
       <main className="flex-grow w-full">
