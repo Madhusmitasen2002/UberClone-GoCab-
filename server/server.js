@@ -18,7 +18,13 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2022-11-
 // ------------------------
 // Middleware
 // ------------------------
-app.use(cors({ origin: "*" }));
+app.use(cors({
+  origin: [
+    "https://uber-clone-go-cab.vercel.app",  // production frontend
+    "http://localhost:5713"                  // dev frontend
+  ],
+  credentials: true,
+}));
 app.use(cookieParser());
 app.use("/api/stripe-webhook", bodyParser.raw({ type: "application/json" }));
 app.use(express.json());
