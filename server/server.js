@@ -18,10 +18,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2022-11-
 // ------------------------
 // Middleware
 // ------------------------
-app.use(cors({
-  origin: [process.env.FRONTEND_URL || "http://localhost:5173"],
-  credentials: true,
-}));
+app.use(cors({ origin: "*" }));
 app.use(cookieParser());
 app.use("/api/stripe-webhook", bodyParser.raw({ type: "application/json" }));
 app.use(express.json());
