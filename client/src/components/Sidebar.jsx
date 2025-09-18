@@ -9,7 +9,10 @@ export default function Sidebar({ setOpenRatings }) {
   const { session, online, logout, toggleOnline } = useContext(UserContext);
   const navigate = useNavigate();
 
-  const displayRole = session?.role || session?.user?.user_metadata?.role || "";
+  const displayRole =
+    localStorage.getItem("userRole") ||
+    session?.user?.user_metadata?.role ||
+    "";
   const displayName = session?.user?.user_metadata?.name || "User";
 
   const toggleDrawer = () => setOpen(!open);
@@ -41,7 +44,7 @@ export default function Sidebar({ setOpenRatings }) {
             </>
           ) : (
             <>
-              <ListItemButton component={Link} to="/payments" onClick={toggleDrawer}>
+              <ListItemButton component={Link} to="/payment-history" onClick={toggleDrawer}>
                 <ListItemIcon><Payment /></ListItemIcon>
                 <ListItemText primary={displayRole === "rider" ? "Payment History" : "Earnings"} />
               </ListItemButton>
@@ -50,6 +53,13 @@ export default function Sidebar({ setOpenRatings }) {
                 <ListItemIcon><Star /></ListItemIcon>
                 <ListItemText primary="Ratings" />
               </ListItemButton>
+
+              {displayRole === "admin" && (
+                <ListItemButton component={Link} to="/admin-dashboard" onClick={toggleDrawer}>
+                  <ListItemIcon>🛠️</ListItemIcon>
+                  <ListItemText primary="Admin Dashboard" />
+                </ListItemButton>
+              )}
 
               {displayRole === "driver" && (
                 <ListItemButton onClick={toggleOnline}>

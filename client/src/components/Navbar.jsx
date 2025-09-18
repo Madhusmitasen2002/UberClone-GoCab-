@@ -21,6 +21,7 @@ import {
   Star,
   Logout as LogoutIcon,
   Menu as MenuIcon,
+  AdminPanelSettings
 } from "@mui/icons-material";
 import { UserContext } from "../context/UserContext";
 
@@ -30,7 +31,10 @@ export default function Navbar({ setOpenRatings }) {
   const navigate = useNavigate();
 
   const displayName = session?.user?.user_metadata?.name || "User";
-  const displayRole = session?.user?.user_metadata?.role || "";
+  const displayRole =
+    localStorage.getItem("userRole") ||
+    session?.user?.user_metadata?.role ||
+    "";
 
   const handleLogout = () => {
     logout();
@@ -87,7 +91,7 @@ export default function Navbar({ setOpenRatings }) {
                 <Button
                   color="inherit"
                   component={Link}
-                  to="/payments"
+                  to="/payment-history"
                   startIcon={<Payment />}
                 >
                   {displayRole === "rider" ? "Payment History" : "Earnings"}
@@ -100,6 +104,17 @@ export default function Navbar({ setOpenRatings }) {
                 >
                   Ratings
                 </Button>
+
+                {displayRole === "admin" && (
+                  <Button
+                    color="inherit"
+                    component={Link}
+                    to="/admin-dashboard"
+                    startIcon={<AdminPanelSettings />}
+                  >
+                    Admin
+                  </Button>
+                )}
 
                 {displayRole === "driver" && (
                   <Box display="flex" alignItems="center" sx={{ color: "white" }}>
@@ -131,75 +146,6 @@ export default function Navbar({ setOpenRatings }) {
           </Box>
         </Toolbar>
       </AppBar>
-
-      {/* Sidebar Drawer */}
-      <Drawer anchor="left" open={openSidebar} onClose={() => setOpenSidebar(false)}>
-        <Box width={260} role="presentation" onClick={() => setOpenSidebar(false)}>
-          <List>
-            <ListItem button component={Link} to="/">
-              <ListItemIcon>
-                <HomeIcon />
-              </ListItemIcon>
-              <ListItemText primary="Home" />
-            </ListItem>
-
-            {!session ? (
-              <>
-                <ListItem button component={Link} to="/login">
-                  <ListItemIcon>
-                    <LoginIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Login" />
-                </ListItem>
-
-                <ListItem button component={Link} to="/signup">
-                  <ListItemIcon>
-                    <AccountCircle />
-                  </ListItemIcon>
-                  <ListItemText primary="Signup" />
-                </ListItem>
-              </>
-            ) : (
-              <>
-                <ListItem button component={Link} to="/payments">
-                  <ListItemIcon>
-                    <Payment />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={displayRole === "rider" ? "Payment History" : "Earnings"}
-                  />
-                </ListItem>
-
-                <ListItem button onClick={() => setOpenRatings(true)}>
-                  <ListItemIcon>
-                    <Star />
-                  </ListItemIcon>
-                  <ListItemText primary="Ratings" />
-                </ListItem>
-
-                {displayRole === "driver" && (
-                  <ListItem>
-                    <ListItemIcon>{online ? "🟢" : "🔴"}</ListItemIcon>
-                    <ListItemText primary={online ? "Online" : "Offline"} />
-                    <Switch
-                      checked={online}
-                      onChange={toggleOnline}
-                      color="success"
-                    />
-                  </ListItem>
-                )}
-
-                <ListItem button onClick={handleLogout}>
-                  <ListItemIcon>
-                    <LogoutIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Logout" />
-                </ListItem>
-              </>
-            )}
-          </List>
-        </Box>
-      </Drawer>
     </>
   );
 }

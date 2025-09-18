@@ -29,18 +29,26 @@ export default function Login() {
       }
 
       const userObj = data.user || {};
-      const role = userObj.user_metadata?.role || localStorage.getItem("role") || "";
-      const name = userObj.user_metadata?.name || localStorage.getItem("userName") || "";
+      const role = userObj.user_metadata?.role;   // ✅ always trust Supabase
+      const name = userObj.user_metadata?.name || "";
 
-      localStorage.setItem("role", role || "");
-      localStorage.setItem("userName", name || "");
+      if (!role) {
+        setFormError("No role assigned. Contact admin.");
+        toast.error("No role assigned. Contact admin.");
+        return;
+      }
+
+      // store fresh data
+      localStorage.setItem("userId", userObj.id);
+      localStorage.setItem("userName", name);
+      localStorage.setItem("userRole", role);
 
       toast.success("✅ Login successful");
 
-      const lower = (role || "").toLowerCase();
-      if (lower === "rider") navigate("/rider");
-      else if (lower === "driver") navigate("/driver");
-      else if (lower === "admin") navigate("/admin-dashboard");
+      // ✅ redirect correctly
+      if (role === "admin") navigate("/admin-dashboard");
+      else if (role === "driver") navigate("/driver");
+      else if (role === "rider") navigate("/rider");
       else navigate("/");
     } catch (err) {
       setFormError(err.message || "Login failed");

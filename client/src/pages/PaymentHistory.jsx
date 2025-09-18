@@ -1,135 +1,93 @@
+// client/components/PaymentHistory.jsx
 import { useEffect, useState } from "react";
 import {
-  Modal,
-  Box,
+  Paper,
   Typography,
-  List,
-  ListItem,
-  ListItemAvatar,
-  Avatar,
-  ListItemText,
-  Button,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  CircularProgress,
 } from "@mui/material";
-import DirectionsCarIcon from "@mui/icons-material/DirectionsCar";
+import { api } from "../../utils/api";
 
-export default function DriverListModal({ open, handleClose, from, to, time, rideId, fare }) {
-  const [drivers, setDrivers] = useState([]);
+export default function PaymentHistory({ userId, role }) {
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!open) return;
-    (async () => {
+    if (!userId) return;
+    const fetchData = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/drivers");
-        const data = await res.json();
-        setDrivers(data || []);
-      } catch (e) {
-        console.error("fetch drivers error", e);
+        let data = [];
+        if (role === "rider") {
+          data = await api.getPaymentsByUser(userId);
+        } else if (role === "driver") {
+          data = await api.getPaymentsByDriver(userId);
+        } else if (role === "admin") {
+          data = await api.getAllPayments();
+        }
+        console.log("💳 Payments fetched:", data);
+        setPayments(data || []);
+      } catch (err) {
+        console.error("❌ Payment fetch error:", err);
+      } finally {
+        setLoading(false);
       }
-    })();
-  }, [open]);
+    };
+    fetchData();
+  }, [userId, role]);
 
-  const selectDriver = async (driverId) => {
-    try {
-      const res = await fetch(`http://localhost:5000/api/rides/${rideId}/accept`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ driver_id: driverId }),
-      });
-      const data = await res.json();
-      if (data?.error) throw new Error(data.error);
-      alert("✅ Driver assigned");
-      handleClose();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
+  if (loading) return <CircularProgress />;
+return (
+  <Paper sx={{ p: 3, mt: 3, bgcolor: "white", color: "black", border: "1px solid #ccc" }}>
+    <Typography variant="h6" gutterBottom>
+      💳 Payment History
+    </Typography>
 
-  const handlePay = async () => {
-    try {
-      const res = await fetch("http://localhost:5000/api/create-checkout-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ride_id: rideId, amount: fare }), // 👈 use real fare
-      });
-      const data = await res.json();
-      if (data?.url) window.location.href = data.url; // ✅ redirect to Stripe checkout
-      else throw new Error(data.error || "Checkout creation failed");
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  return (
-    <Modal open={open} onClose={handleClose}>
-      <Box
-        sx={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: 420,
-          bgcolor: "black",
-          borderRadius: 2,
-          boxShadow: 24,
-          p: 3,
-          color: "white",
-        }}
-      >
-        <Typography variant="h6" fontWeight="bold" mb={1}>
-          Available Drivers
-        </Typography>
-        <Typography variant="body2" mb={2}>
-          From: <b>{from}</b> <br />
-          To: <b>{to}</b> <br />
-          Time: <b>{time || "Now"}</b> <br />
-          Fare: <b>₹{fare}</b>
-        </Typography>
-        <List>
-          {drivers.map((d) => (
-            <ListItem
-              key={d.id}
-              secondaryAction={
-                <Button
-                  variant="contained"
-                  sx={{
-                    bgcolor: "white",
-                    color: "black",
-                    "&:hover": { bgcolor: "#ddd" },
-                  }}
-                  onClick={() => selectDriver(d.id)}
-                >
-                  Select
-                </Button>
-              }
-            >
-              <ListItemAvatar>
-                <Avatar sx={{ bgcolor: "white", color: "black" }}>
-                  <DirectionsCarIcon />
-                </Avatar>
-              </ListItemAvatar>
-              <ListItemText
-                primary={`${d.name}`}
-                secondary={`⭐ ${d.average_rating || "—"}`}
-              />
-            </ListItem>
+    {loading ? (
+      <Typography>⏳ Loading payments...</Typography>
+    ) : payments.length === 0 ? (
+      <Typography>No payment records found yet.</Typography>
+    ) : (
+      <Table>
+        <TableHead>
+          <TableRow>
+            {role === "admin" && <TableCell>Rider</TableCell>}
+            {role === "admin" && <TableCell>Driver</TableCell>}
+            <TableCell>Status</TableCell>
+            <TableCell>Payment</TableCell>
+            <TableCell>Fare</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {payments.length === 0 && (
+  <TableRow>
+    <TableCell colSpan={5} style={{ textAlign: "center" }}>
+      No records found (showing demo row)
+    </TableCell>
+  </TableRow>
+)}
+          {payments.map((p) => (
+            <TableRow key={p.id}>
+              {role === "admin" && <TableCell>{p.passenger_id}</TableCell>}
+              {role === "admin" && <TableCell>{p.driver_id || "—"}</TableCell>}
+              <TableCell>{p.status || "unknown"}</TableCell>
+              <TableCell
+                style={{
+                  color: p.payment_status === "paid" ? "green" : "red",
+                  fontWeight: "bold",
+                }}
+              >
+                {p.payment_status || "unpaid"}
+              </TableCell>
+              <TableCell>₹{p.fare || 0}</TableCell>
+            </TableRow>
           ))}
-        </List>
-        <Box textAlign="center" mt={2}>
-          <Button
-            variant="contained"
-            fullWidth
-            onClick={handlePay}
-            sx={{
-              bgcolor: "white",
-              color: "black",
-              fontWeight: "bold",
-              "&:hover": { bgcolor: "#ddd" },
-            }}
-          >
-            Proceed to Pay ₹{fare}
-          </Button>
-        </Box>
-      </Box>
-    </Modal>
-  );
+        </TableBody>
+      </Table>
+    )}
+  </Paper>
+);
 }

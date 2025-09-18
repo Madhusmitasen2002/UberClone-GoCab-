@@ -1,18 +1,11 @@
+// client/components/RideRequestCard.jsx
 import { Box, Typography, Button, Paper } from "@mui/material";
+import { api } from "../utils/api"; // ✅ use centralized API
 
 export default function RideRequestCard({ ride, driverId }) {
   const acceptRide = async () => {
     try {
-      const res = await fetch(
-        `http://localhost:5000/api/rides/${ride.id}/accept`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ driver_id: driverId }),
-        }
-      );
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      await api.acceptRide(ride.id, { driver_id: driverId });
       alert("✅ Ride accepted!");
       // hide the card immediately (before realtime update kicks in)
       document.getElementById(`ride-${ride.id}`)?.remove();
