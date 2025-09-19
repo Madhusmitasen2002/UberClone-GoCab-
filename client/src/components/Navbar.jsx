@@ -25,8 +25,7 @@ import {
 } from "@mui/icons-material";
 import { UserContext } from "../context/UserContext";
 
-export default function Navbar({ setOpenRatings }) {
-  const [openSidebar, setOpenSidebar] = useState(false);
+export default function Navbar({ setOpenSidebar,setOpenRatings }) {
   const { session, online, logout, toggleOnline } = useContext(UserContext);
   const navigate = useNavigate();
 

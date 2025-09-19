@@ -1,7 +1,8 @@
 // client/src/App.jsx
-import { useState } from "react";
+import React, { useState } from "react";
 import { Routes, Route } from "react-router-dom";
 import Navbar from "./components/Navbar";
+import Sidebar from "./components/Sidebar"; 
 import Footer from "./components/Footer";
 import AdminDashboard from "./pages/AdminDashboard";
 import Home from "./pages/Home";
@@ -16,11 +17,12 @@ import RatingsModal from "./components/RatingsModal";
 
 export default function App() {
   const [showRatings, setShowRatings] = useState(false);
-
+  const [openSidebar, setOpenSidebar] = useState(false);
   return (
     <div className="flex flex-col min-h-screen w-screen">
       <ToastContainer position="top-center" autoClose={3000} />
-      <Navbar setOpenRatings={setShowRatings} />
+      <Navbar setOpenSidebar={setOpenSidebar} setOpenRatings={setShowRatings} />
+<Sidebar open={openSidebar} setOpen={setOpenSidebar} setOpenRatings={setShowRatings} />
       <main className="flex-grow w-full">
         <Routes>
           <Route path="/" element={<Home />} />

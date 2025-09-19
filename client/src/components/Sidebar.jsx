@@ -4,8 +4,7 @@ import { Menu, Login, AccountCircle, Star, Payment, Home, Logout } from "@mui/ic
 import { Link, useNavigate } from "react-router-dom";
 import { UserContext } from "../context/UserContext";
 
-export default function Sidebar({ setOpenRatings }) {
-  const [open, setOpen] = useState(false);
+export default function Sidebar({ open, setOpen, setOpenRatings }) {
   const { session, online, logout, toggleOnline } = useContext(UserContext);
   const navigate = useNavigate();
 
